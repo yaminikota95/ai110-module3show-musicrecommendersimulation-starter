@@ -109,6 +109,30 @@ Use this section to document the experiments you ran. For example:
 
 ![Recommendation output screenshot](recomendationSS.png)
 
+### Adversarial / Edge-Case Profile Results
+
+The following screenshots show terminal output from five stress-test profiles designed to expose scoring edge cases.
+
+**Profile 1 — Sad but Pumped** (genre=blues, mood=sad, energy=0.9): tests whether genre+mood bonus overrides a large energy mismatch.
+
+![Sad but Pumped profile results](ss1.png)
+
+**Profile 2 — Ghost Genre** (genre=metal, mood=intense, energy=0.92): tests behavior when no catalog song matches the requested genre.
+
+![Ghost Genre profile results](ss2.png)
+
+**Profile 3 — Out-of-Bounds Energy** (genre=edm, mood=euphoric, energy=1.5): tests whether energy scoring can go negative when `target_energy` exceeds 1.0.
+
+![Out-of-Bounds Energy profile results](ss3.png)
+
+**Profile 4 — Acoustic Blindspot** (genre=classical, mood=peaceful, energy=0.1, likes_acoustic=True): tests whether the `likes_acoustic` field has any effect on results.
+
+![Acoustic Blindspot profile results](ss4.png)
+
+**Profile 5 — Mood-Genre Mismatch** (genre=hip-hop, mood=chill, energy=0.5): tests what happens when the only song matching the genre has a different mood than requested.
+
+![Mood-Genre Mismatch profile results](ss5.png)
+
 ---
 
 ## Limitations and Risks
