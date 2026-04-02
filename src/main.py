@@ -17,23 +17,41 @@ def main() -> None:
     print(f"Loaded songs: {len(songs)}")
 
     profiles = {
+        # Wants mainstream pop right now, summery and upbeat, 2020s sound, very vocal
         "High-Energy Pop": {
-            "favorite_genre": "pop",
-            "favorite_mood":  "happy",
-            "target_energy":  0.85,
-            "likes_acoustic": False,
+            "favorite_genre":           "pop",
+            "favorite_mood":            "happy",
+            "target_energy":            0.85,
+            "likes_acoustic":           False,
+            "preferred_popularity":     80,
+            "preferred_decade":         2020,
+            "preferred_mood_tags":      ["upbeat", "carefree", "summery"],
+            "preferred_instrumentalness": 0.10,
+            "preferred_liveness":       0.10,
         },
+        # Underground lofi listener, ambient+focused tags, instrumental, studio recordings
         "Chill Lofi": {
-            "favorite_genre": "lofi",
-            "favorite_mood":  "chill",
-            "target_energy":  0.40,
-            "likes_acoustic": True,
+            "favorite_genre":           "lofi",
+            "favorite_mood":            "chill",
+            "target_energy":            0.40,
+            "likes_acoustic":           True,
+            "preferred_popularity":     55,
+            "preferred_decade":         2020,
+            "preferred_mood_tags":      ["calm", "focused", "ambient"],
+            "preferred_instrumentalness": 0.85,
+            "preferred_liveness":       0.05,
         },
+        # Wants intense rock, likes older decades (2010s), live feel, driving/anthemic tags
         "Deep Intense Rock": {
-            "favorite_genre": "rock",
-            "favorite_mood":  "intense",
-            "target_energy":  0.90,
-            "likes_acoustic": False,
+            "favorite_genre":           "rock",
+            "favorite_mood":            "intense",
+            "target_energy":            0.90,
+            "likes_acoustic":           False,
+            "preferred_popularity":     70,
+            "preferred_decade":         2010,
+            "preferred_mood_tags":      ["aggressive", "anthemic", "driving"],
+            "preferred_instrumentalness": 0.20,
+            "preferred_liveness":       0.40,
         },
     }
 
