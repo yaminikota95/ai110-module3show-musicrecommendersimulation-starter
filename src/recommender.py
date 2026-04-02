@@ -446,12 +446,12 @@ def _diversify(
         if artist_hits > 0:
             deduction = artist_penalty * artist_hits
             penalty_notes.append(
-                f"artist '{song['artist']}' already seen ×{artist_hits} ({-deduction:+.2f})"
+                f"artist '{song['artist']}' already seen x{artist_hits} ({-deduction:+.2f})"
             )
         if genre_hits > 0:
             deduction = genre_penalty * genre_hits
             penalty_notes.append(
-                f"genre '{song['genre']}' already seen ×{genre_hits} ({-deduction:+.2f})"
+                f"genre '{song['genre']}' already seen x{genre_hits} ({-deduction:+.2f})"
             )
 
         explanation = ", ".join(reasons)

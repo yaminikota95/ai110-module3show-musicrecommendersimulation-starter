@@ -4,6 +4,9 @@ Command line runner for the Music Recommender Simulation.
 Run with:  python -m src.main
 """
 
+import re
+from tabulate import tabulate
+
 from .recommender import load_songs, recommend_songs, STRATEGIES
 
 
@@ -52,28 +55,96 @@ PROFILES = {
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Formatting helpers
 # ---------------------------------------------------------------------------
 
-def _divider(char: str = "-", width: int = 62) -> str:
-    return char * width
+def _section(title: str, width: int = 72) -> None:
+    """Print a bold section header."""
+    print("\n" + "=" * width)
+    print(f"  {title}")
+    print("=" * width)
 
 
-def _print_results(
-    user_prefs: dict,
-    songs: list,
-    strategy_key: str = "vibe_match",
-) -> None:
-    strategy = STRATEGIES[strategy_key]
-    results = recommend_songs(user_prefs, songs, k=5, strategy=strategy)
+def _subsection(title: str, width: int = 72) -> None:
+    print("\n" + "-" * width)
+    print(f"  {title}")
+    print("-" * width)
 
-    print(f"\n  [{strategy.name}]  {strategy.description}")
-    print(f"  {'#':<3} {'Title':<25} {'Artist':<20} {'Score':>6}")
-    print(f"  {_divider()}")
+
+def _profile_summary(label: str, prefs: dict) -> str:
+    tags = ", ".join(prefs.get("preferred_mood_tags") or []) or "—"
+    return (
+        f"  Profile : {label}\n"
+        f"  Genre   : {prefs['favorite_genre']}   "
+        f"Mood: {prefs['favorite_mood']}   "
+        f"Energy: {prefs['target_energy']}\n"
+        f"  Tags    : {tags}   "
+        f"Popularity: {prefs.get('preferred_popularity', 50)}   "
+        f"Decade: {prefs.get('preferred_decade', 2020)}"
+    )
+
+
+def _format_reasons(explanation: str) -> str:
+    """
+    Convert the flat comma-joined reason string into one line per signal.
+
+    Strategy
+    --------
+    Every scoring reason ends with a score in parentheses, e.g. (+1.96) or
+    (-0.75).  We split on the pattern  "),  " followed by a lowercase letter
+    so we don't accidentally split on commas *inside* a tag list like
+    "['calm', 'focused']".
+
+    Diversity penalty notes (appended after "  ||  ") are separated out and
+    prefixed with "! " so they stand out visually.
+    """
+    # Separate score block from optional diversity penalty block
+    blocks = explanation.split("  ||  ")
+    score_block = blocks[0]
+    diversity_block = blocks[1] if len(blocks) > 1 else None
+
+    # Split score reasons: match "), " only when the next char is a-z
+    raw_parts = re.split(r"\), (?=[a-z])", score_block)
+
+    # Re-attach the closing paren that the split consumed (last part keeps its own)
+    reasons = [
+        p + ")" if not p.endswith(")") else p
+        for p in raw_parts
+    ]
+
+    lines = list(reasons)
+
+    if diversity_block:
+        # e.g. "diversity penalty: artist 'LoRoom' already seen x1 (-1.50); ..."
+        notes_raw = diversity_block.replace("diversity penalty: ", "")
+        for note in notes_raw.split("; "):
+            lines.append(f"! {note}")
+
+    return "\n".join(lines)
+
+
+def _results_table(results: list) -> str:
+    """
+    Build a tabulate table string from a recommend_songs() result list.
+
+    Columns
+    -------
+    #   Title   Artist   Genre   Mood   Score   Scoring Reasons
+    """
+    rows = []
     for rank, (song, score, explanation) in enumerate(results, start=1):
-        print(f"  {rank:<3} {song['title']:<25} {song['artist']:<20} {score:>6.2f}")
-        print(f"      Why: {explanation}")
-        print()
+        rows.append([
+            rank,
+            song["title"],
+            song["artist"],
+            song["genre"],
+            song["mood"],
+            f"{score:.2f}",
+            _format_reasons(explanation),
+        ])
+
+    headers = ["#", "Title", "Artist", "Genre", "Mood", "Score", "Scoring Reasons"]
+    return tabulate(rows, headers=headers, tablefmt="outline")
 
 
 # ---------------------------------------------------------------------------
@@ -82,72 +153,61 @@ def _print_results(
 
 def main() -> None:
     songs = load_songs("data/songs.csv")
-    print(f"Loaded {len(songs)} songs.\n")
+    print(f"\nLoaded {len(songs)} songs from catalog.\n")
 
     # ------------------------------------------------------------------
     # Section 1 — Standard profiles, default VibeMatch strategy
     # ------------------------------------------------------------------
-    print(_divider("="))
-    print("SECTION 1 — STANDARD PROFILES  (strategy: vibe_match)")
-    print(_divider("="))
+    _section("SECTION 1 — STANDARD PROFILES  (strategy: vibe_match)")
 
     for label, user_prefs in PROFILES.items():
-        print(f"\n>>> {label}")
-        print(
-            f"    genre={user_prefs['favorite_genre']}  "
-            f"mood={user_prefs['favorite_mood']}  "
-            f"energy={user_prefs['target_energy']}"
+        _subsection(label)
+        print(_profile_summary(label, user_prefs))
+        print()
+
+        results = recommend_songs(
+            user_prefs, songs, k=5,
+            strategy=STRATEGIES["vibe_match"],
         )
-        _print_results(user_prefs, songs, strategy_key="vibe_match")
+        print(_results_table(results))
 
     # ------------------------------------------------------------------
-    # Section 2 — Strategy comparison on one profile
-    #
-    # We run the same "Chill Lofi" user through every strategy so you can
-    # see exactly how the ranking shifts when the priorities change.
+    # Section 2 — Same profile, every strategy
     # ------------------------------------------------------------------
-    print("\n" + _divider("="))
-    print("SECTION 2 — STRATEGY COMPARISON  (profile: Chill Lofi)")
-    print(_divider("="))
+    _section("SECTION 2 — STRATEGY COMPARISON  (profile: Chill Lofi)")
     print(
-        "\nSame user, five different scoring modes.\n"
-        "Watch how the top-5 list changes as priorities shift.\n"
+        "\n  Same user. Five different scoring modes.\n"
+        "  Watch how the top-5 shifts as priorities change.\n"
     )
 
     demo_profile = PROFILES["Chill Lofi"]
-    print(
-        f"Profile: genre={demo_profile['favorite_genre']}  "
-        f"mood={demo_profile['favorite_mood']}  "
-        f"energy={demo_profile['target_energy']}  "
-        f"tags={demo_profile['preferred_mood_tags']}\n"
-    )
+    print(_profile_summary("Chill Lofi", demo_profile))
 
-    for strategy_key in STRATEGIES:
-        _print_results(demo_profile, songs, strategy_key=strategy_key)
-        print(_divider("-"))
+    for _, strategy in STRATEGIES.items():
+        print(f"\n  Strategy: [{strategy.name}]  {strategy.description}\n")
+        results = recommend_songs(
+            demo_profile, songs, k=5,
+            strategy=strategy,
+        )
+        print(_results_table(results))
 
     # ------------------------------------------------------------------
-    # Section 3 — Diversity Penalty: before vs. after
-    #
-    # The Chill Lofi profile exposes the problem clearly:
-    #   - LoRoom appears twice (Midnight Coding + Focus Flow)
-    #   - The lofi genre fills three of five slots
-    # With diversity ON, repeated artists and genres are penalised so the
-    # list opens up to songs from other genres that still fit the mood.
-    #
-    # Penalty values (tunable):
-    #   artist_penalty = 1.5 pts per prior occurrence of the same artist
-    #   genre_penalty  = 0.75 pts per prior occurrence of the same genre
+    # Section 3 — Diversity penalty: before vs. after
     # ------------------------------------------------------------------
-    print("\n" + _divider("="))
-    print("SECTION 3 — DIVERSITY PENALTY  (profile: Chill Lofi)")
-    print(_divider("="))
+    _section("SECTION 3 — DIVERSITY PENALTY  (profile: Chill Lofi)")
     print(
-        "\nartist_penalty=1.5 pts per repeat  |  genre_penalty=0.75 pts per repeat\n"
+        "\n  Without penalty: LoRoom appears twice, lofi fills 3/5 slots.\n"
+        "  With penalty   : artist_penalty=1.5 pts/repeat, "
+        "genre_penalty=0.75 pts/repeat.\n"
+        "  Rows marked '!' show diversity deductions applied.\n"
     )
+    print(_profile_summary("Chill Lofi", demo_profile))
 
-    for label, diversity_on in [("WITHOUT diversity penalty", False),
-                                 ("WITH diversity penalty", True)]:
+    for label, diversity_on in [
+        ("WITHOUT diversity penalty", False),
+        ("WITH    diversity penalty  (artist_penalty=1.5 | genre_penalty=0.75)", True),
+    ]:
+        print(f"\n  --- {label} ---\n")
         results = recommend_songs(
             demo_profile, songs, k=5,
             strategy=STRATEGIES["vibe_match"],
@@ -155,18 +215,7 @@ def main() -> None:
             artist_penalty=1.5,
             genre_penalty=0.75,
         )
-        print(f"  --- {label} ---")
-        print(f"  {'#':<3} {'Title':<25} {'Artist':<20} {'Genre':<12} {'Score':>6}")
-        print(f"  {_divider()}")
-        for rank, (song, score, explanation) in enumerate(results, start=1):
-            print(
-                f"  {rank:<3} {song['title']:<25} {song['artist']:<20}"
-                f" {song['genre']:<12} {score:>6.2f}"
-            )
-            if diversity_on and "diversity penalty" in explanation:
-                penalty_note = explanation.split("||")[1].strip()
-                print(f"      {penalty_note}")
-        print()
+        print(_results_table(results))
 
 
 if __name__ == "__main__":
