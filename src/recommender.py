@@ -389,19 +389,108 @@ def load_songs(csv_path: str) -> List[Dict]:
     return songs
 
 
+def _diversify(
+    scored: List[Tuple[Dict, float, List[str]]],
+    k: int,
+    artist_penalty: float,
+    genre_penalty: float,
+) -> List[Tuple[Dict, float, str]]:
+    """
+    Greedy re-ranking that penalises repeated artists and genres.
+
+    How it works
+    ------------
+    All songs arrive pre-scored. We pick them one at a time.
+    Before each pick we compute an *effective score* for every remaining song:
+
+        effective = raw_score
+                    - artist_penalty × (times that artist already appears)
+                    - genre_penalty  × (times that genre already appears)
+
+    The song with the highest effective score wins the slot.
+    Penalties compound: a third song by the same artist is penalised
+    2× as much as the second one.
+
+    Parameters
+    ----------
+    scored          : list of (song_dict, raw_score, reasons_list)
+    k               : how many songs to return
+    artist_penalty  : points deducted per prior occurrence of the same artist
+    genre_penalty   : points deducted per prior occurrence of the same genre
+    """
+    remaining = list(scored)           # [(song, raw_score, reasons), ...]
+    selected: List[Tuple[Dict, float, str]] = []
+    seen_artists: Dict[str, int] = {}
+    seen_genres:  Dict[str, int] = {}
+
+    while remaining and len(selected) < k:
+        # Find the candidate with the best effective score
+        best_idx = 0
+        best_effective = float("-inf")
+        for i, (song, raw, _) in enumerate(remaining):
+            artist_hits = seen_artists.get(song["artist"], 0)
+            genre_hits  = seen_genres.get(song["genre"],  0)
+            effective = (raw
+                         - artist_penalty * artist_hits
+                         - genre_penalty  * genre_hits)
+            if effective > best_effective:
+                best_effective = effective
+                best_idx = i
+
+        song, _, reasons = remaining.pop(best_idx)
+        artist_hits = seen_artists.get(song["artist"], 0)
+        genre_hits  = seen_genres.get(song["genre"],  0)
+
+        # Annotate the explanation with any diversity deductions applied
+        penalty_notes = []
+        if artist_hits > 0:
+            deduction = artist_penalty * artist_hits
+            penalty_notes.append(
+                f"artist '{song['artist']}' already seen ×{artist_hits} ({-deduction:+.2f})"
+            )
+        if genre_hits > 0:
+            deduction = genre_penalty * genre_hits
+            penalty_notes.append(
+                f"genre '{song['genre']}' already seen ×{genre_hits} ({-deduction:+.2f})"
+            )
+
+        explanation = ", ".join(reasons)
+        if penalty_notes:
+            explanation += "  ||  diversity penalty: " + "; ".join(penalty_notes)
+
+        seen_artists[song["artist"]] = artist_hits + 1
+        seen_genres[song["genre"]]   = genre_hits  + 1
+        selected.append((song, round(best_effective, 2), explanation))
+
+    return selected
+
+
 def recommend_songs(
     user_prefs: Dict,
     songs: List[Dict],
     k: int = 5,
     strategy: Optional[ScoringStrategy] = None,
+    diversity: bool = False,
+    artist_penalty: float = 1.5,
+    genre_penalty: float = 0.75,
 ) -> List[Tuple[Dict, float, str]]:
     """
     Score every song and return the top k as (song, score, explanation) tuples.
-    Pass a strategy= to override the default VibeMatchStrategy.
+
+    Parameters
+    ----------
+    strategy        : scoring strategy to use (defaults to VibeMatchStrategy)
+    diversity       : if True, apply greedy diversity re-ranking after scoring
+    artist_penalty  : points deducted per repeated artist in the selection (diversity only)
+    genre_penalty   : points deducted per repeated genre in the selection (diversity only)
     """
     active = strategy or VibeMatchStrategy()
     scored = [(song, *active.score(user_prefs, song)) for song in songs]
     ranked = sorted(scored, key=lambda item: item[1], reverse=True)
+
+    if diversity:
+        return _diversify(ranked, k, artist_penalty, genre_penalty)
+
     return [
         (song, score, ", ".join(reasons))
         for song, score, reasons in ranked[:k]

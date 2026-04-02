@@ -126,6 +126,48 @@ def main() -> None:
         _print_results(demo_profile, songs, strategy_key=strategy_key)
         print(_divider("-"))
 
+    # ------------------------------------------------------------------
+    # Section 3 — Diversity Penalty: before vs. after
+    #
+    # The Chill Lofi profile exposes the problem clearly:
+    #   - LoRoom appears twice (Midnight Coding + Focus Flow)
+    #   - The lofi genre fills three of five slots
+    # With diversity ON, repeated artists and genres are penalised so the
+    # list opens up to songs from other genres that still fit the mood.
+    #
+    # Penalty values (tunable):
+    #   artist_penalty = 1.5 pts per prior occurrence of the same artist
+    #   genre_penalty  = 0.75 pts per prior occurrence of the same genre
+    # ------------------------------------------------------------------
+    print("\n" + _divider("="))
+    print("SECTION 3 — DIVERSITY PENALTY  (profile: Chill Lofi)")
+    print(_divider("="))
+    print(
+        "\nartist_penalty=1.5 pts per repeat  |  genre_penalty=0.75 pts per repeat\n"
+    )
+
+    for label, diversity_on in [("WITHOUT diversity penalty", False),
+                                 ("WITH diversity penalty", True)]:
+        results = recommend_songs(
+            demo_profile, songs, k=5,
+            strategy=STRATEGIES["vibe_match"],
+            diversity=diversity_on,
+            artist_penalty=1.5,
+            genre_penalty=0.75,
+        )
+        print(f"  --- {label} ---")
+        print(f"  {'#':<3} {'Title':<25} {'Artist':<20} {'Genre':<12} {'Score':>6}")
+        print(f"  {_divider()}")
+        for rank, (song, score, explanation) in enumerate(results, start=1):
+            print(
+                f"  {rank:<3} {song['title']:<25} {song['artist']:<20}"
+                f" {song['genre']:<12} {score:>6.2f}"
+            )
+            if diversity_on and "diversity penalty" in explanation:
+                penalty_note = explanation.split("||")[1].strip()
+                print(f"      {penalty_note}")
+        print()
+
 
 if __name__ == "__main__":
     main()
